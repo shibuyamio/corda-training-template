@@ -1,9 +1,10 @@
 package net.corda.training.contract
 
-import net.corda.core.contracts.CommandData
-import net.corda.core.contracts.Contract
-import net.corda.core.contracts.requireSingleCommand
+import net.corda.core.contracts.*
+import net.corda.core.contracts.Requirements.using
 import net.corda.core.transactions.LedgerTransaction
+import net.corda.finance.contracts.asset.Cash
+import net.corda.finance.contracts.utils.sumCash
 import net.corda.training.state.IOUState
 
 /**
@@ -22,9 +23,8 @@ class IOUContract : Contract {
      * function to check for a number of commands which implement this interface.
      */
     interface Commands : CommandData {
-        // Add commands here.
-        // E.g
-        // class DoSomething : TypeOnlyCommandData(), Commands
+        class Issue: TypeOnlyCommandData(), Commands
+        class Settle: TypeOnlyCommandData(), Commands
     }
 
     /**
@@ -32,9 +32,57 @@ class IOUContract : Contract {
      * The constraints are self documenting so don't require any additional explanation.
      */
     override fun verify(tx: LedgerTransaction) {
-        // Add contract code here.
-        // requireThat {
-        //     ...
-        // }
+        val command = tx.commands.requireSingleCommand<Commands>()
+
+        when(command.value) {
+            is Commands.Issue -> verifyIssueCommand(tx, command)
+            is Commands.Settle -> verifySettleCommand(tx, command)
+        }
+
+    }
+
+    private fun verifySettleCommand(tx: LedgerTransaction, command: CommandWithParties<Commands>) {
+        requireThat {
+            val iouStates = tx.groupStates(IOUState::class.java) { it.linearId }.single()
+            "There must be one input IOU." using(iouStates.inputs.size == 1)
+            // input IOU
+            val inputIOU = iouStates.inputs.single()
+
+            // Cash
+            val cashStates = tx.outputsOfType<Cash.State>()
+            "There must be output cash." using(cashStates.isNotEmpty())
+            "There must be output cash paid to the recipient." using(
+                    cashStates.none { it.owner != inputIOU.lender }
+                    )
+
+            val remainingAmount = inputIOU.amount - inputIOU.paid
+            val paidCash = cashStates.sumCash().withoutIssuer()
+            "The amount settled cannot be more than the amount outstanding." using(
+                    remainingAmount >= paidCash
+                    )
+            // output IOU
+            if (remainingAmount - paidCash == Amount(0, inputIOU.amount.token)) {
+                "There must be no output IOU as it has been fully settled." using (iouStates.outputs.isEmpty())
+            } else {
+                "There must be one output IOU." using (iouStates.outputs.size == 1)
+            }
+
+            // Constraints on signers
+            "Contract verification failed" using(
+                    command.signers.toSet() == setOf(inputIOU.lender, inputIOU.borrower)
+                    .map { it.owningKey }.toSet()
+                    )
+        }
+    }
+
+    private fun verifyIssueCommand(tx: LedgerTransaction, command: CommandWithParties<CommandData>) {
+        requireThat {
+            "No inputs should be consumed when issuing an IOU." using (tx.inputs.isEmpty())
+            "Only one output state should be created when issuing an IOU." using (tx.outputs.size == 1)
+            val state = tx.outputStates.single() as IOUState
+            "A newly issued IOU must have a positive amount." using(state.amount > Amount(0, state.amount.token))
+            "The lender and borrower cannot have the same identity." using(state.lender != state.borrower)
+            "Both lender and borrower together only may sign IOU issue transaction." using(command.signers.toSet() == state.participants.map { it.owningKey }.toSet())
+        }
     }
 }
