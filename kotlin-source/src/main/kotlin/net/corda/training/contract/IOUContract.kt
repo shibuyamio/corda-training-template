@@ -65,6 +65,10 @@ class IOUContract : Contract {
                 "There must be no output IOU as it has been fully settled." using (iouStates.outputs.isEmpty())
             } else {
                 "There must be one output IOU." using (iouStates.outputs.size == 1)
+                val outputIOU = iouStates.outputs.single()
+                "The borrower may not change when settling." using(outputIOU.borrower == inputIOU.borrower)
+                "The amount may not change when settling." using(outputIOU.amount == inputIOU.amount)
+                "The lender may not change when settling." using(outputIOU.lender == inputIOU.lender)
             }
 
             // Constraints on signers
