@@ -107,6 +107,7 @@ class IOUSettleTests {
         val iouTwo = IOUState(5.POUNDS, ALICE.party, BOB.party)
         val inputCash = createCashState(5.POUNDS, BOB.party)
         val outputCash = inputCash.withNewOwner(newOwner = ALICE.party)
+
         ledgerServices.ledger {
             transaction {
                 input(IOUContract.IOU_CONTRACT_ID, iouOne)
@@ -141,6 +142,7 @@ class IOUSettleTests {
         val iouOne = IOUState(10.POUNDS, ALICE.party, BOB.party)
         val tenPounds = createCashState(10.POUNDS, BOB.party)
         val fivePounds = createCashState(5.POUNDS, BOB.party)
+
         ledgerServices.ledger {
             transaction {
                 command(listOf(ALICE.publicKey, BOB.publicKey), IOUContract.Commands.Settle())
@@ -423,40 +425,40 @@ class IOUSettleTests {
      * Both the lender and the borrower must have signed an IOU issue transaction.
      * TODO: Add a constraint to the contract code that ensures this is the case.
      */
-//    @Test
-//    fun mustBeSignedByAllParticipants() {
-//        val iou = IOUState(10.DOLLARS, ALICE.party, BOB.party)
-//        val cash = createCashState(5.DOLLARS, BOB.party)
-//        val cashPayment = cash.withNewOwner(newOwner = ALICE.party)
-//        ledgerServices.ledger {
-//            transaction {
-//                input(Cash.PROGRAM_ID, cash)
-//                input(IOUContract.IOU_CONTRACT_ID, iou)
-//                output(Cash.PROGRAM_ID, cashPayment.ownableState)
-//                command(BOB.publicKey, cashPayment.command)
-//                output(IOUContract.IOU_CONTRACT_ID, iou.pay(5.DOLLARS))
-//                command(listOf(ALICE.publicKey, CHARLIE.publicKey), IOUContract.Commands.Settle())
-//                failsWith("Both lender and borrower together only must sign IOU settle transaction.")
-//            }
-//            transaction {
-//                input(Cash.PROGRAM_ID, cash)
-//                input(IOUContract.IOU_CONTRACT_ID, iou)
-//                output(Cash.PROGRAM_ID, cashPayment.ownableState)
-//                command(BOB.publicKey, cashPayment.command)
-//                output(IOUContract.IOU_CONTRACT_ID, iou.pay(5.DOLLARS))
-//                command(BOB.publicKey, IOUContract.Commands.Settle())
-//                failsWith("Both lender and borrower together only must sign IOU settle transaction.")
-//            }
-//            transaction {
-//                input(Cash.PROGRAM_ID, cash)
-//                input(IOUContract.IOU_CONTRACT_ID, iou)
-//                output(Cash.PROGRAM_ID, cashPayment.ownableState)
-//                command(BOB.publicKey, cashPayment.command)
-//                output(IOUContract.IOU_CONTRACT_ID, iou.pay(5.DOLLARS))
-//                command(listOf(ALICE.publicKey, BOB.publicKey), IOUContract.Commands.Settle())
-//                verifies()
-//            }
-//        }
-//    }
+    @Test
+    fun mustBeSignedByAllParticipants() {
+        val iou = IOUState(10.DOLLARS, ALICE.party, BOB.party)
+        val cash = createCashState(5.DOLLARS, BOB.party)
+        val cashPayment = cash.withNewOwner(newOwner = ALICE.party)
+        ledgerServices.ledger {
+            transaction {
+                input(Cash.PROGRAM_ID, cash)
+                input(IOUContract.IOU_CONTRACT_ID, iou)
+                output(Cash.PROGRAM_ID, cashPayment.ownableState)
+                command(BOB.publicKey, cashPayment.command)
+                output(IOUContract.IOU_CONTRACT_ID, iou.pay(5.DOLLARS))
+                command(listOf(ALICE.publicKey, CHARLIE.publicKey), IOUContract.Commands.Settle())
+                failsWith("Both lender and borrower together only must sign IOU settle transaction.")
+            }
+            transaction {
+                input(Cash.PROGRAM_ID, cash)
+                input(IOUContract.IOU_CONTRACT_ID, iou)
+                output(Cash.PROGRAM_ID, cashPayment.ownableState)
+                command(BOB.publicKey, cashPayment.command)
+                output(IOUContract.IOU_CONTRACT_ID, iou.pay(5.DOLLARS))
+                command(BOB.publicKey, IOUContract.Commands.Settle())
+                failsWith("Both lender and borrower together only must sign IOU settle transaction.")
+            }
+            transaction {
+                input(Cash.PROGRAM_ID, cash)
+                input(IOUContract.IOU_CONTRACT_ID, iou)
+                output(Cash.PROGRAM_ID, cashPayment.ownableState)
+                command(BOB.publicKey, cashPayment.command)
+                output(IOUContract.IOU_CONTRACT_ID, iou.pay(5.DOLLARS))
+                command(listOf(ALICE.publicKey, BOB.publicKey), IOUContract.Commands.Settle())
+                verifies()
+            }
+        }
+    }
 }
 

@@ -38,7 +38,6 @@ class IOUContract : Contract {
             is Commands.Issue -> verifyIssueCommand(tx, command)
             is Commands.Settle -> verifySettleCommand(tx, command)
         }
-
     }
 
     private fun verifySettleCommand(tx: LedgerTransaction, command: CommandWithParties<Commands>) {
@@ -72,7 +71,7 @@ class IOUContract : Contract {
             }
 
             // Constraints on signers
-            "Contract verification failed" using(
+            "Both lender and borrower together only must sign IOU settle transaction." using(
                     command.signers.toSet() == setOf(inputIOU.lender, inputIOU.borrower)
                     .map { it.owningKey }.toSet()
                     )
