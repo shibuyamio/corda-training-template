@@ -2,6 +2,7 @@ package net.corda.training.contract
 
 import net.corda.core.contracts.*
 import net.corda.core.contracts.Requirements.using
+import net.corda.core.identity.Party
 import net.corda.core.transactions.LedgerTransaction
 import net.corda.finance.contracts.asset.Cash
 import net.corda.finance.contracts.utils.sumCash
@@ -25,6 +26,7 @@ class IOUContract : Contract {
     interface Commands : CommandData {
         class Issue: TypeOnlyCommandData(), Commands
         class Settle: TypeOnlyCommandData(), Commands
+        class Transfer: TypeOnlyCommandData(), Commands
     }
 
     /**
@@ -37,18 +39,20 @@ class IOUContract : Contract {
         when(command.value) {
             is Commands.Issue -> verifyIssueCommand(tx, command)
             is Commands.Settle -> verifySettleCommand(tx, command)
+            is Commands.Transfer -> verifyTransferCommand(tx, command)
         }
     }
 
     private fun verifySettleCommand(tx: LedgerTransaction, command: CommandWithParties<Commands>) {
         requireThat {
-            val iouStates = tx.groupStates(IOUState::class.java) { it.linearId }.single()
-            "There must be one input IOU." using(iouStates.inputs.size == 1)
+            val iouStates = getIOUStates(tx)
+
             // input IOU
-            val inputIOU = iouStates.inputs.single()
+            "There must be one input IOU." using(iouStates.inputs.size == 1)
 
             // Cash
             val cashStates = tx.outputsOfType<Cash.State>()
+            val inputIOU = iouStates.inputs.single()
             "There must be output cash." using(cashStates.isNotEmpty())
             "There must be output cash paid to the recipient." using(
                     cashStates.none { it.owner != inputIOU.lender }
@@ -72,8 +76,7 @@ class IOUContract : Contract {
 
             // Constraints on signers
             "Both lender and borrower together only must sign IOU settle transaction." using(
-                    command.signers.toSet() == setOf(inputIOU.lender, inputIOU.borrower)
-                    .map { it.owningKey }.toSet()
+                    verifySigners(command, inputIOU.participants.toSet())
                     )
         }
     }
@@ -85,7 +88,42 @@ class IOUContract : Contract {
             val state = tx.outputStates.single() as IOUState
             "A newly issued IOU must have a positive amount." using(state.amount > Amount(0, state.amount.token))
             "The lender and borrower cannot have the same identity." using(state.lender != state.borrower)
-            "Both lender and borrower together only may sign IOU issue transaction." using(command.signers.toSet() == state.participants.map { it.owningKey }.toSet())
+
+            // Constraints on signers
+            "Both lender and borrower together only may sign IOU issue transaction." using(
+                    verifySigners(command, state.participants.toSet())
+                    )
         }
     }
+
+    private fun verifyTransferCommand(tx: LedgerTransaction, command: CommandWithParties<CommandData>) {
+        requireThat {
+            "An IOU transfer transaction should only consume one input state." using (tx.inputs.size == 1)
+            "An IOU transfer transaction should only create one output state." using (
+                    tx.outputs.size == 1
+                    )
+
+            val inputIOU = tx.inputsOfType<IOUState>().single()
+            val outputIOU = tx.outputsOfType<IOUState>().single()
+
+            "Only the lender property may change." using (
+                    inputIOU.copy(lender = outputIOU.lender) == outputIOU
+                    )
+            "The lender property must change in a transfer." using ( inputIOU.lender != outputIOU.lender )
+
+            // check sign
+            "The borrower, old lender and new lender only must sign an IOU transfer transaction" using (
+                    verifySigners(command, setOf(inputIOU.lender, inputIOU.borrower, outputIOU.lender))
+                    )
+
+        }
+    }
+
+    private fun verifySigners(command: CommandWithParties<CommandData>, parties: Set<Party>) =
+                command.signers.toSet() == parties.map { it.owningKey }.toSet()
+
+
+    private fun getIOUStates(tx: LedgerTransaction) =
+            tx.groupStates(IOUState::class.java) { it.linearId }.single()
+
 }

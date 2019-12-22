@@ -1,6 +1,8 @@
 package net.corda.training.flow
 
 import co.paralleluniverse.fibers.Suspendable
+import net.corda.core.contracts.Command
+import net.corda.core.contracts.CommandWithParties
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.CollectSignaturesFlow
 import net.corda.core.flows.FinalityFlow
@@ -10,9 +12,12 @@ import net.corda.core.flows.InitiatedBy
 import net.corda.core.flows.InitiatingFlow
 import net.corda.core.flows.SignTransactionFlow
 import net.corda.core.flows.StartableByRPC
+import net.corda.core.identity.Party
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
+import net.corda.training.contract.IOUContract
 import net.corda.training.state.IOUState
+import java.security.PublicKey
 
 /**
  * This is the flow which handles issuance of new IOUs on the ledger.
@@ -25,10 +30,16 @@ import net.corda.training.state.IOUState
 class IOUIssueFlow(val state: IOUState) : FlowLogic<SignedTransaction>() {
     @Suspendable
     override fun call(): SignedTransaction {
-        // Placeholder code to avoid type error when running the tests. Remove before starting the flow task!
-        return serviceHub.signInitialTransaction(
-                TransactionBuilder(notary = null)
+        val notary = serviceHub.networkMapCache.notaryIdentities.single()
+        val txBuilder = TransactionBuilder(notary)
+        val command = Command(IOUContract.Commands.Issue(),
+            state.participants.map { it.owningKey }.toList()
         )
+
+        txBuilder.addCommand(command)
+        txBuilder.addOutputState(state)
+
+        return serviceHub.signInitialTransaction(txBuilder)
     }
 }
 
